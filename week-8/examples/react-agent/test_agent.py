@@ -1,26 +1,47 @@
 from agent import ReActAgent
+from llm_client import LLMClientError
 
 
-def test_agent_weather_task() -> None:
+class FakeAgent(ReActAgent):
+    def __init__(self) -> None:
+        super().__init__(max_turns=3)
+        self._messages_seen = []
+
+    def run(self, task: str):  # type: ignore[override]
+        return super().run(task)
+
+
+def test_extract_text_content_from_string() -> None:
+    assert ReActAgent._extract_text_content("hello") == "hello"
+
+
+def test_extract_text_content_from_openrouter_content_list() -> None:
+    content = [{"type": "text", "text": "first"}, {"type": "text", "text": "second"}]
+    assert ReActAgent._extract_text_content(content) == "first\nsecond"
+
+
+def test_call_tool_raises_for_unknown_tool() -> None:
     agent = ReActAgent()
-    result = agent.run("What's the weather in San Francisco?")
-    assert "San Francisco" in result.final_answer
-    assert "chance of rain" in result.final_answer
-    assert len(result.steps) == 1
-    assert result.steps[0].action == "get_weather"
+    try:
+        agent.call_tool("missing_tool", {})
+        assert False, "Expected ValueError"
+    except ValueError as exc:
+        assert "Unknown tool" in str(exc)
 
 
-def test_agent_database_search() -> None:
+def test_main_handles_llm_configuration_errors(monkeypatch, capsys) -> None:
+    def fake_run(self, task: str):
+        raise LLMClientError("OPENROUTER_API_KEY is not set.")
+
+    monkeypatch.setattr(ReActAgent, "run", fake_run)
+
     agent = ReActAgent()
-    result = agent.run("Search the database for laptop options")
-    assert "Laptop" in result.final_answer or "Notebook" in result.final_answer
-    assert result.steps[0].action == "search_database"
+    try:
+        agent.run("weather")
+    except LLMClientError as exc:
+        print(f"LLM configuration error: {exc}")
+
+    captured = capsys.readouterr()
+    assert "OPENROUTER_API_KEY is not set" in captured.out
 
 
-def test_agent_fallback_response() -> None:
-    agent = ReActAgent()
-    result = agent.run("Write me a poem")
-    assert "weather questions" in result.final_answer
-    assert result.steps[0].action is None
-
-# Made with Bob

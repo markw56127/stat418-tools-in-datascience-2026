@@ -17,4 +17,3 @@ def test_predict_endpoint() -> None:
     assert response.status_code == 200
     assert response.json() == {"prediction": 2.0}
 
-# Made with Bob

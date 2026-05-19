@@ -16,4 +16,3 @@ CMD [
   "--server.headless=true"
 ]
 
-# Made with Bob

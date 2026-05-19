@@ -201,22 +201,3 @@ The `ci.yml` file demonstrates a simple multi-service workflow:
 
 This is enough to teach the idea that different services in one repository may have different validation steps.
 
-## Why this example matters
-
-Use this example to discuss:
-
-- frontend/backend separation
-- API contracts between services
-- how containerization helps run multiple services together
-- how CI scales from a single app to a multi-service repo
-- what changes when you move from local development to deployment
-
-## Extensions students could add
-
-Natural next steps include:
-
-- replacing in-memory storage with Redis or PostgreSQL
-- adding persistent logging
-- deploying backend and frontend separately to Cloud Run
-- adding stronger frontend tests
-- adding authentication between services

@@ -26,4 +26,3 @@ if st.button("Load history"):
     else:
         st.error("Could not load history")
 
-# Made with Bob

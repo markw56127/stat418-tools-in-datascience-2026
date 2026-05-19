@@ -15,4 +15,3 @@ services:
     depends_on:
       - backend
 
-# Made with Bob

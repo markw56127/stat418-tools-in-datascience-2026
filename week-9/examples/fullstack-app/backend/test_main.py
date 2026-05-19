@@ -47,4 +47,3 @@ def test_history_endpoint_tracks_predictions():
     assert "requests" in body
     assert len(body["requests"]) >= 1
 
-# Made with Bob

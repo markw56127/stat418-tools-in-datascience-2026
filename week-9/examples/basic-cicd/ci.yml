@@ -31,4 +31,3 @@ jobs:
       - name: Check formatting
         run: black --check .
 
-# Made with Bob

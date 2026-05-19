@@ -119,14 +119,7 @@ The `deploy.yml` file shows the structure of a deployment job that can:
 
 In a real repository, secrets such as service account credentials would be stored in GitHub repository secrets.
 
-## Suggested teaching points
 
-Use this example to explain:
-
-- why CI should run on every push and pull request,
-- why linting and formatting belong in automation,
-- why containers make deployment more reproducible,
-- and how CI and CD are connected but not identical.
 
 ## Notes
 

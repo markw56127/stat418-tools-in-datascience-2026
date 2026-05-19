@@ -26,4 +26,3 @@ jobs:
             --region us-central1 \
             --allow-unauthenticated
 
-# Made with Bob

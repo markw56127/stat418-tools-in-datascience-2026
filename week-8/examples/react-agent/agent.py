@@ -4,7 +4,15 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from tools import TOOLS
+from llm_client import LLMClientError, chat_completion
+from tools import TOOL_SCHEMAS, TOOLS
+
+
+SYSTEM_PROMPT = """You are a ReAct-style assistant that can answer user requests by calling tools.
+Use tools when they help you answer the question accurately.
+If you call a tool, use the returned observation to produce a concise final answer.
+Do not invent tool outputs.
+"""
 
 
 @dataclass
@@ -24,7 +32,6 @@ class AgentResult:
 class ReActAgent:
     def __init__(self, max_turns: int = 5) -> None:
         self.max_turns = max_turns
-        self.retry_count = 0
 
     def call_tool(self, tool_name: str, args: dict[str, Any]) -> Any:
         if tool_name not in TOOLS:
@@ -32,79 +39,76 @@ class ReActAgent:
         return TOOLS[tool_name](**args)
 
     def run(self, task: str) -> AgentResult:
-        task_lower = task.lower()
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": task},
+        ]
         steps: list[Step] = []
 
-        if "weather" in task_lower:
-            location = self._extract_location(task)
-            thought = f"I need to get the weather for {location}."
-            observation = self.call_tool("get_weather", {"location": location})
-            steps.append(
-                Step(
-                    thought=thought,
-                    action="get_weather",
-                    action_input={"location": location},
-                    observation=observation,
+        for _ in range(self.max_turns):
+            assistant_message = chat_completion(
+                messages=messages,
+                tools=TOOL_SCHEMAS,
+                tool_choice="auto",
+                temperature=0.0,
+            )
+
+            tool_calls = assistant_message.get("tool_calls", [])
+            content = assistant_message.get("content")
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": content or "",
+                    **({"tool_calls": tool_calls} if tool_calls else {}),
+                }
+            )
+
+            if not tool_calls:
+                final_answer = self._extract_text_content(content)
+                return AgentResult(final_answer=final_answer, steps=steps)
+
+            for tool_call in tool_calls:
+                function_data = tool_call["function"]
+                tool_name = function_data["name"]
+                raw_arguments = function_data.get("arguments", "{}")
+                parsed_arguments = json.loads(raw_arguments)
+
+                thought = self._extract_text_content(content) or f"Calling tool {tool_name}."
+                observation = self.call_tool(tool_name, parsed_arguments)
+
+                steps.append(
+                    Step(
+                        thought=thought,
+                        action=tool_name,
+                        action_input=parsed_arguments,
+                        observation=observation,
+                    )
                 )
-            )
 
-            rain = observation["precipitation_chance"]
-            if rain >= 50:
-                recommendation = "You should bring an umbrella."
-            else:
-                recommendation = "You probably do not need an umbrella."
-
-            final_answer = (
-                f"The weather in {location} is {observation['temp_f']}°F and "
-                f"{observation['conditions']} with a {rain}% chance of rain. "
-                f"{recommendation}"
-            )
-            return AgentResult(final_answer=final_answer, steps=steps)
-
-        if "search" in task_lower or "database" in task_lower or "laptop" in task_lower:
-            query = self._extract_query(task)
-            thought = f"I should search the product database for '{query}'."
-            observation = self.call_tool("search_database", {"query": query})
-            steps.append(
-                Step(
-                    thought=thought,
-                    action="search_database",
-                    action_input={"query": query},
-                    observation=observation,
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "content": json.dumps(observation),
+                    }
                 )
-            )
 
-            if not observation:
-                final_answer = f"No products matched '{query}'."
-            else:
-                products = ", ".join(product["name"] for product in observation)
-                final_answer = f"I found these matching products: {products}."
-            return AgentResult(final_answer=final_answer, steps=steps)
-
-        steps.append(
-            Step(
-                thought="I do not have an appropriate tool for this task, so I should respond directly."
-            )
-        )
-        return AgentResult(
-            final_answer="I can currently help with weather questions and simple product database searches.",
-            steps=steps,
-        )
+        raise RuntimeError("Agent exceeded max_turns without producing a final answer.")
 
     @staticmethod
-    def _extract_location(task: str) -> str:
-        known_locations = ["San Francisco", "Los Angeles", "New York"]
-        for location in known_locations:
-            if location.lower() in task.lower():
-                return location
-        return "San Francisco"
-
-    @staticmethod
-    def _extract_query(task: str) -> str:
-        for query in ["laptop", "audio", "keyboard", "accessory"]:
-            if query in task.lower():
-                return query
-        return task.strip()
+    def _extract_text_content(content: Any) -> str:
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(item.get("text", ""))
+            return "\n".join(part for part in parts if part).strip()
+        return str(content)
 
 
 def print_result(result: AgentResult) -> None:
@@ -121,7 +125,10 @@ def print_result(result: AgentResult) -> None:
 if __name__ == "__main__":
     agent = ReActAgent()
     user_task = "What's the weather in San Francisco and should I bring an umbrella?"
-    result = agent.run(user_task)
-    print_result(result)
+    try:
+        result = agent.run(user_task)
+        print_result(result)
+    except LLMClientError as exc:
+        print(f"LLM configuration error: {exc}")
 
 # Made with Bob

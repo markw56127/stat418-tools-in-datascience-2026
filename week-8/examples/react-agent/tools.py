@@ -2,24 +2,34 @@ from __future__ import annotations
 
 from typing import Any
 
+import requests
 
-WEATHER_DATA = {
-    "san francisco": {
-        "temp_f": 65,
-        "conditions": "partly cloudy",
-        "precipitation_chance": 20,
-    },
-    "los angeles": {
-        "temp_f": 74,
-        "conditions": "sunny",
-        "precipitation_chance": 5,
-    },
-    "new york": {
-        "temp_f": 59,
-        "conditions": "light rain",
-        "precipitation_chance": 75,
-    },
+
+GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
+WEATHER_CODE_LABELS = {
+    0: "clear sky",
+    1: "mainly clear",
+    2: "partly cloudy",
+    3: "overcast",
+    45: "fog",
+    48: "depositing rime fog",
+    51: "light drizzle",
+    53: "moderate drizzle",
+    55: "dense drizzle",
+    61: "slight rain",
+    63: "moderate rain",
+    65: "heavy rain",
+    71: "slight snow",
+    73: "moderate snow",
+    75: "heavy snow",
+    80: "rain showers",
+    81: "moderate rain showers",
+    82: "violent rain showers",
+    95: "thunderstorm",
 }
+
 
 PRODUCTS = [
     {"name": "Laptop Pro 14", "category": "laptop", "price": 1499},
@@ -30,11 +40,49 @@ PRODUCTS = [
 
 
 def get_weather(location: str) -> dict[str, Any]:
-    """Return mock weather data for a supported location."""
-    normalized = location.strip().lower()
-    if normalized not in WEATHER_DATA:
-        raise ValueError(f"Unknown location: {location}")
-    return {"location": location, **WEATHER_DATA[normalized]}
+    """Get live weather data for a city using the Open-Meteo geocoding and forecast APIs."""
+    geo_response = requests.get(
+        GEOCODING_URL,
+        params={"name": location, "count": 1, "language": "en", "format": "json"},
+        timeout=30,
+    )
+    geo_response.raise_for_status()
+    geo_payload = geo_response.json()
+
+    results = geo_payload.get("results", [])
+    if not results:
+        raise ValueError(f"Could not geocode location: {location}")
+
+    match = results[0]
+    latitude = match["latitude"]
+    longitude = match["longitude"]
+
+    forecast_response = requests.get(
+        FORECAST_URL,
+        params={
+            "latitude": latitude,
+            "longitude": longitude,
+            "current": "temperature_2m,weather_code,precipitation_probability",
+            "temperature_unit": "fahrenheit",
+            "precipitation_unit": "percent",
+        },
+        timeout=30,
+    )
+    forecast_response.raise_for_status()
+    forecast_payload = forecast_response.json()
+
+    current = forecast_payload.get("current", {})
+    weather_code = current.get("weather_code")
+    precipitation_probability = current.get("precipitation_probability", 0)
+
+    return {
+        "location": match["name"],
+        "region": match.get("admin1"),
+        "country": match.get("country"),
+        "temp_f": current.get("temperature_2m"),
+        "conditions": WEATHER_CODE_LABELS.get(weather_code, f"weather code {weather_code}"),
+        "precipitation_chance": precipitation_probability,
+    }
 
 
 def search_database(query: str) -> list[dict[str, Any]]:
@@ -49,25 +97,31 @@ def search_database(query: str) -> list[dict[str, Any]]:
 
 TOOL_SCHEMAS = [
     {
-        "name": "get_weather",
-        "description": "Get current weather for a city.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "location": {"type": "string", "description": "City name"},
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a city using a live weather API.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string", "description": "City name to look up"},
+                },
+                "required": ["location"],
             },
-            "required": ["location"],
         },
     },
     {
-        "name": "search_database",
-        "description": "Search a small product database.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search term"},
+        "type": "function",
+        "function": {
+            "name": "search_database",
+            "description": "Search a small product database.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search term"},
+                },
+                "required": ["query"],
             },
-            "required": ["query"],
         },
     },
 ]
@@ -78,4 +132,3 @@ TOOLS = {
     "search_database": search_database,
 }
 
-# Made with Bob
