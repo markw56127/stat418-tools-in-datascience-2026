@@ -11,6 +11,7 @@ This example demonstrates:
 - using OpenRouter with the NVIDIA Nemotron free model by default
 - combining local tools and external APIs in an MCP workflow
 - interactive CLI usage for demos and experimentation
+- a persistent MCP session in interactive mode
 - verbose trace output showing the MCP tool calls made by the agent
 
 ## Files
@@ -61,6 +62,11 @@ The server exposes these tools:
 
 The agent launches the MCP server over stdio, initializes an MCP session, discovers the available tools, and lets the LLM decide when to call them.
 
+Behavior differs slightly by mode:
+- one-shot mode starts a temporary MCP server/session, runs the request, and exits
+- interactive mode starts one MCP server/session and keeps it alive across turns
+- interactive mode also preserves conversation context until you type `clear`
+
 ```bash
 # Run the default demo task
 python mcp_agent.py
@@ -71,7 +77,7 @@ python mcp_agent.py --task "Look up alice, check the weather in her city, and se
 # Show the MCP tool trace
 python mcp_agent.py --task "Look up bob and summarize his account." --verbose
 
-# Start an interactive CLI loop
+# Start an interactive CLI loop with one persistent MCP session
 python mcp_agent.py --interactive
 
 # Interactive mode with verbose MCP tool traces
@@ -92,30 +98,36 @@ $ python mcp_agent.py --task "Look up alice, check the weather in her city, and 
 
 Tool: get_user_info
 Arguments: {"username": "alice"}
-Result: {"username": "alice", "full_name": "Alice Johnson", "city": "San Francisco", "account_tier": "premium"}
+Result: {"name": "Alice", "plan": "premium", "email": "alice@example.com", "city": "Los Angeles"}
 
 Tool: get_weather
-Arguments: {"location": "San Francisco"}
-Result: {"location": "San Francisco", "temp_f": 58.4, "conditions": "partly cloudy", "wind_speed_mph": 7.1}
+Arguments: {"city": "Los Angeles"}
+Result: {"city": "Los Angeles", "temperature_f": 68.2, "wind_speed_mph": 6.4, "conditions": "mainly clear"}
 
 Tool: send_notification
-Arguments: {"username": "alice", "message": "Hi Alice, it's currently cool and partly cloudy in San Francisco."}
-Result: {"status": "sent", "username": "alice", "message_preview": "Hi Alice, it's currently cool and partly cloudy in San Francisco."}
+Arguments: {"username": "alice", "message": "Hi Alice, it's currently mainly clear and 68.2°F in Los Angeles."}
+Result: {"status": "sent", "username": "alice", "message": "Hi Alice, it's currently mainly clear and 68.2°F in Los Angeles.", "delivery_target": "alice@example.com"}
 
-Final Answer: I looked up Alice, checked the current weather in San Francisco, and sent her a short notification with the update.
+Final Answer: I looked up Alice, checked the current weather in Los Angeles, and sent her a short notification with the update.
 ```
 
 ### Interactive mode
 
 ```text
 $ python mcp_agent.py --interactive
-MCP agent interactive mode. Type 'exit' or 'quit' to stop.
+MCP agent interactive mode. Type 'exit' or 'quit' to stop. Type 'clear' to reset context.
 
 Task> look up bob and summarize his account
-Final Answer: Bob is a standard-tier user based in Seattle.
+Final Answer: Bob is a free-tier user based in San Francisco.
 
 Task> check the weather in his city too
-Final Answer: Seattle is currently cool with light wind.
+Final Answer: San Francisco is currently cool with light wind.
+
+Task> clear
+Context cleared.
+
+Task> check the weather in his city too
+Final Answer: I need to know which user you mean before I can check the weather in their city.
 
 Task> quit
 Exiting.
@@ -176,6 +188,8 @@ The CLI makes the example easier to teach and explore because you can:
 - run a single structured request with `--task`
 - demonstrate actual MCP tool traffic with `--verbose`
 - run multiple prompts in a row with `--interactive`
+- preserve context across interactive turns
+- reset the conversation deliberately with `clear`
 - compare the same MCP server behavior across different user requests without editing source code
 
 ## Example Workflow
@@ -214,7 +228,9 @@ That makes it much closer to how production agent systems are structured.
 
 **Weather lookup failed**: the Open-Meteo geocoding request may fail if the city is misspelled or the network is unavailable
 
-**Server/client confusion**: `mcp_server.py` defines the tools and can be run directly, but `mcp_agent.py` also starts that server internally over stdio for the MCP session
+**Server/client confusion**: `mcp_server.py` defines the tools and can be run directly, but `mcp_agent.py` also starts that server internally over stdio for the MCP session. In interactive mode it now keeps that same session alive until you exit.
+
+**Follow-up prompts stopped making sense**: if you typed `clear`, context was intentionally reset. Otherwise, interactive mode now keeps prior conversation turns.
 
 **Want to inspect what happened**: rerun with `--verbose` to see the MCP tool calls, arguments, and returned results
 

@@ -46,61 +46,92 @@ class MCPReActAgent:
                 await session.initialize()
                 tools_result = await session.list_tools()
                 llm_tools = [self._tool_to_openrouter_schema(tool) for tool in tools_result.tools]
+                messages = self._initial_messages()
+                return await self._run_with_session(
+                    session=session,
+                    llm_tools=llm_tools,
+                    messages=messages,
+                    task=task,
+                )
 
-                messages: list[dict[str, Any]] = [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": task},
-                ]
-                tool_calls: list[MCPToolCall] = []
+    async def run_with_existing_session(
+        self,
+        *,
+        session: ClientSession,
+        llm_tools: list[dict[str, Any]],
+        messages: list[dict[str, Any]],
+        task: str,
+    ) -> MCPAgentResult:
+        return await self._run_with_session(
+            session=session,
+            llm_tools=llm_tools,
+            messages=messages,
+            task=task,
+        )
 
-                for _ in range(self.max_turns):
-                    assistant_message = chat_completion(
-                        messages=messages,
-                        tools=llm_tools,
-                        tool_choice="auto",
-                        temperature=0.0,
+    async def _run_with_session(
+        self,
+        *,
+        session: ClientSession,
+        llm_tools: list[dict[str, Any]],
+        messages: list[dict[str, Any]],
+        task: str,
+    ) -> MCPAgentResult:
+        messages.append({"role": "user", "content": task})
+        tool_calls: list[MCPToolCall] = []
+
+        for _ in range(self.max_turns):
+            assistant_message = chat_completion(
+                messages=messages,
+                tools=llm_tools,
+                tool_choice="auto",
+                temperature=0.0,
+            )
+
+            raw_content = assistant_message.get("content")
+            raw_tool_calls = assistant_message.get("tool_calls", [])
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": raw_content or "",
+                    **({"tool_calls": raw_tool_calls} if raw_tool_calls else {}),
+                }
+            )
+
+            if not raw_tool_calls:
+                final_answer = self._extract_text_content(raw_content)
+                return MCPAgentResult(final_answer=final_answer, tool_calls=tool_calls)
+
+            for tool_call in raw_tool_calls:
+                function_data = tool_call["function"]
+                tool_name = function_data["name"]
+                arguments = json.loads(function_data.get("arguments", "{}"))
+
+                tool_result = await session.call_tool(tool_name, arguments=arguments)
+                normalized_result = self._normalize_tool_result(tool_result)
+
+                tool_calls.append(
+                    MCPToolCall(
+                        tool_name=tool_name,
+                        arguments=arguments,
+                        result=normalized_result,
                     )
+                )
 
-                    raw_content = assistant_message.get("content")
-                    raw_tool_calls = assistant_message.get("tool_calls", [])
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "content": json.dumps(normalized_result),
+                    }
+                )
 
-                    messages.append(
-                        {
-                            "role": "assistant",
-                            "content": raw_content or "",
-                            **({"tool_calls": raw_tool_calls} if raw_tool_calls else {}),
-                        }
-                    )
+        raise RuntimeError("Agent exceeded max_turns without producing a final answer.")
 
-                    if not raw_tool_calls:
-                        final_answer = self._extract_text_content(raw_content)
-                        return MCPAgentResult(final_answer=final_answer, tool_calls=tool_calls)
-
-                    for tool_call in raw_tool_calls:
-                        function_data = tool_call["function"]
-                        tool_name = function_data["name"]
-                        arguments = json.loads(function_data.get("arguments", "{}"))
-
-                        tool_result = await session.call_tool(tool_name, arguments=arguments)
-                        normalized_result = self._normalize_tool_result(tool_result)
-
-                        tool_calls.append(
-                            MCPToolCall(
-                                tool_name=tool_name,
-                                arguments=arguments,
-                                result=normalized_result,
-                            )
-                        )
-
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tool_call["id"],
-                                "content": json.dumps(normalized_result),
-                            }
-                        )
-
-                raise RuntimeError("Agent exceeded max_turns without producing a final answer.")
+    @staticmethod
+    def _initial_messages() -> list[dict[str, Any]]:
+        return [{"role": "system", "content": SYSTEM_PROMPT}]
 
     @staticmethod
     def _tool_to_openrouter_schema(tool: Any) -> dict[str, Any]:
@@ -172,23 +203,44 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def run_interactive(agent: MCPReActAgent, *, verbose: bool) -> None:
-    print("MCP agent interactive mode. Type 'exit' or 'quit' to stop.")
-    while True:
-        user_task = input("\nTask> ").strip()
-        if not user_task:
-            continue
-        if user_task.lower() in {"exit", "quit"}:
-            print("Exiting.")
-            return
+    server_params = StdioServerParameters(
+        command="python",
+        args=["mcp_server.py"],
+    )
 
-        try:
-            result = await agent.run(user_task)
-            print_result(result, verbose=verbose)
-        except LLMClientError as exc:
-            print(f"LLM configuration error: {exc}")
-            return
-        except Exception as exc:
-            print(f"Agent error: {exc}")
+    async with stdio_client(server_params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            tools_result = await session.list_tools()
+            llm_tools = [agent._tool_to_openrouter_schema(tool) for tool in tools_result.tools]
+            messages = agent._initial_messages()
+
+            print("MCP agent interactive mode. Type 'exit' or 'quit' to stop. Type 'clear' to reset context.")
+            while True:
+                user_task = input("\nTask> ").strip()
+                if not user_task:
+                    continue
+                if user_task.lower() in {"exit", "quit"}:
+                    print("Exiting.")
+                    return
+                if user_task.lower() == "clear":
+                    messages = agent._initial_messages()
+                    print("Context cleared.")
+                    continue
+
+                try:
+                    result = await agent.run_with_existing_session(
+                        session=session,
+                        llm_tools=llm_tools,
+                        messages=messages,
+                        task=user_task,
+                    )
+                    print_result(result, verbose=verbose)
+                except LLMClientError as exc:
+                    print(f"LLM configuration error: {exc}")
+                    return
+                except Exception as exc:
+                    print(f"Agent error: {exc}")
 
 
 if __name__ == "__main__":
