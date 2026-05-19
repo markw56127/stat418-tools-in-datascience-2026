@@ -2,301 +2,263 @@
 
 ## Overview
 
-This week explores building AI agents that can use tools, make decisions, and orchestrate complex workflows. You'll create sophisticated agent systems using MCP servers, implement multi-step reasoning, and design production-ready AI applications. This builds on Week 7's API and MCP foundations to create intelligent, autonomous systems.
+This week focuses on two concrete agent implementations that you can run locally:
+
+1. a **Simple ReAct Agent** in `examples/react-agent/`
+2. an **MCP-Powered Agent** in `examples/mcp-agent/`
+
+Instead of treating agents as only abstract concepts, the week is organized around these two runnable examples. The ReAct example introduces the basic thought-action-observation loop. The MCP example shows how tools can be exposed through a FastMCP server and used in a more structured tool ecosystem.
+
+## How to Use This Week
+
+Work through the materials in this order:
+
+1. Read the ReAct example in `examples/react-agent/`
+2. Run `agent.py` and inspect `tools.py`
+3. Run the ReAct tests in `test_agent.py`
+4. Move to `examples/mcp-agent/`
+5. Run the FastMCP server in `mcp_server.py`
+6. Run the MCP agent in `mcp_agent.py`
+7. Compare how direct local tools differ from MCP-exposed tools
 
 ## Topics Covered
 
-### AI Agent Fundamentals
-- What are AI agents and why they matter
-- Agent architectures (ReAct, Plan-and-Execute, etc.)
-- Tool use and function calling
-- Agent memory and state management
-- Multi-agent systems
-- Agent evaluation and testing
+### 1. AI Agent Fundamentals
+Grounded in `examples/react-agent/`
 
-### MCP Integration Patterns
-- Connecting AI assistants to MCP servers
-- Tool discovery and registration
-- Handling tool responses
-- Error handling in tool calls
-- Streaming tool outputs
-- Security considerations for MCP
+- what an AI agent is
+- the thought → action → observation loop
+- tool use and function schemas
+- fallback behavior when no tool applies
+- basic agent testing
 
-### Agent Design Patterns
-- **ReAct (Reasoning + Acting)**: Think, act, observe loop
-- **Plan-and-Execute**: Plan first, then execute steps
-- **Reflection**: Self-critique and improvement
-- **Multi-agent collaboration**: Specialized agents working together
-- **Human-in-the-loop**: Agent asks for human input when needed
+### 2. ReAct Agent Design
+Grounded in `examples/react-agent/agent.py`
 
-### Tool Orchestration
-- Chaining multiple tool calls
-- Parallel tool execution
-- Conditional tool use
-- Tool result aggregation
-- Handling tool failures
-- Tool versioning and updates
+- implementing a simple ReAct loop
+- routing tasks to tools
+- generating a final answer from tool output
+- tracing agent behavior step by step
 
-### Advanced Agent Capabilities
-- Long-term memory with vector databases
-- Context management and summarization
-- Dynamic tool selection
-- Learning from feedback
-- Cost optimization strategies
-- Rate limiting and throttling
+### 3. Tool Design
+Grounded in `examples/react-agent/tools.py`
 
-### Production Considerations
-- Monitoring agent behavior
-- Logging and debugging agents
-- Safety and alignment
-- Cost tracking and optimization
-- Scaling agent systems
-- A/B testing agent designs
+- defining focused tool functions
+- attaching lightweight schemas to tools
+- returning structured outputs
+- keeping tools small and teachable
+
+### 4. MCP Integration Patterns
+Grounded in `examples/mcp-agent/`
+
+- exposing tools through FastMCP
+- server-side tool registration
+- discoverable tool interfaces
+- agent interaction with MCP-style tools
+
+### 5. FastMCP Server Design
+Grounded in `examples/mcp-agent/mcp_server.py`
+
+- creating an MCP server with `FastMCP`
+- decorating functions as tools
+- designing useful tool signatures
+- organizing a simple local MCP workflow
+
+### 6. MCP Agent Workflows
+Grounded in `examples/mcp-agent/mcp_agent.py`
+
+- selecting which MCP-style tool to use
+- looking up demo users
+- sending demo notifications
+- querying a small demo product database
+
+### 7. Testing and Reliability
+Grounded in `examples/react-agent/test_agent.py`
+
+- testing expected agent behavior
+- checking tool routing
+- checking fallback logic
+- building confidence in agent examples before adding LLMs
 
 ## Why This Matters
 
-AI agents represent the next evolution of AI applications:
-- **Autonomous**: Can complete tasks without constant human guidance
-- **Tool-using**: Can interact with APIs, databases, and external systems
-- **Adaptive**: Can adjust strategy based on results
-- **Scalable**: Can handle complex, multi-step workflows
+AI agents are useful because they can:
+- reason about tasks
+- call tools
+- use observations to decide what to do next
+- complete multi-step workflows instead of only producing text
 
-Real-world applications:
-- **Data analysis agents**: Automatically explore datasets and generate insights
-- **Research assistants**: Search, synthesize, and summarize information
-- **Workflow automation**: Handle complex business processes
-- **Customer service**: Resolve issues using multiple tools and systems
-- **Code generation**: Write, test, and debug code autonomously
+For this course, the key idea is not just that agents are powerful, but that you can build and inspect them as ordinary Python programs.
 
-For data scientists:
-- Automate exploratory data analysis
-- Build intelligent data pipelines
-- Create self-improving models
-- Deploy adaptive ML systems
-- Enhance user experiences with AI
+## Example 1: Simple ReAct Agent
 
-## Examples
+Location:
+- `week-8/examples/react-agent/`
 
-### 1. Simple ReAct Agent (`examples/react-agent/`)
-- Basic ReAct loop implementation
-- Tool calling with function schemas
-- Reasoning and action steps
-- Error handling and retries
-- Complete with tests
-- Uses free-tier APIs (Google Gemini or OpenRouter)
+Files:
+- `agent.py`
+- `tools.py`
+- `test_agent.py`
+- `requirements.txt`
 
-### 2. MCP-Powered Agent (`examples/mcp-agent/`)
-- Connecting to MCP servers
-- Dynamic tool discovery
-- Using multiple MCP tools
-- Handling tool responses
-- Integration with Claude Desktop
-- Uses free-tier APIs (Google Gemini or OpenRouter)
+What it demonstrates:
+- a direct local ReAct loop
+- a weather tool
+- a simple product search tool
+- deterministic behavior that is easy to inspect
+- tests that verify expected outcomes
 
-## Key Concepts
+Run it:
 
-### Agent Loop
-```
-1. Receive task/question
-2. Reason about what to do
-3. Select and call tool(s)
-4. Observe results
-5. Reason about results
-6. Repeat or provide final answer
+```bash
+cd week-8/examples/react-agent
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+python agent.py
+pytest test_agent.py
 ```
 
-### Tool Calling
-AI models can now call functions/tools:
-```python
-tools = [
-    {
-        "name": "search_database",
-        "description": "Search the product database",
-        "parameters": {
-            "query": "string",
-            "limit": "integer"
-        }
-    }
-]
+## Example 2: MCP-Powered Agent
+
+Location:
+- `week-8/examples/mcp-agent/`
+
+Files:
+- `mcp_server.py`
+- `mcp_agent.py`
+- `config.json`
+- `requirements.txt`
+
+What it demonstrates:
+- tools defined with FastMCP
+- a simple local MCP server
+- discoverable tool endpoints
+- a matching Python agent workflow
+- a configuration file for local MCP registration
+
+Run it:
+
+```bash
+cd week-8/examples/mcp-agent
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+python mcp_server.py
 ```
 
-The model decides when and how to use tools based on the task.
+In a separate terminal:
 
-### MCP Protocol
-```
-Client (AI Assistant) <-> MCP Server <-> Tools
-```
-- **Standardized**: Works with any MCP-compatible AI
-- **Discoverable**: Tools are automatically discovered
-- **Typed**: Strong typing for parameters and returns
-- **Secure**: Built-in authentication and authorization
-
-### Agent Memory
-- **Short-term**: Current conversation context
-- **Long-term**: Vector database for past interactions
-- **Working memory**: Intermediate results and state
-- **Episodic**: Specific past experiences
-- **Semantic**: General knowledge and facts
-
-## Agent Architectures
-
-### ReAct (Reasoning + Acting)
-Best for: General-purpose tasks, exploratory work
-```
-Thought: I need to find information about X
-Action: search_database(query="X")
-Observation: Found 3 results...
-Thought: Now I need to analyze these results
-Action: analyze_data(data=results)
-Observation: Analysis shows...
-Thought: I have enough information to answer
-Final Answer: Based on the analysis...
+```bash
+cd week-8/examples/mcp-agent
+source .venv/bin/activate
+python mcp_agent.py
 ```
 
-### Plan-and-Execute
-Best for: Complex, multi-step tasks
+## Key Concept: The Agent Loop
+
+The ReAct example shows this loop directly:
+
+1. receive a task
+2. decide which tool to use
+3. call the tool
+4. inspect the result
+5. produce a final answer
+
+This is the simplest useful mental model for agents.
+
+## Key Concept: MCP
+
+The MCP example shows a more structured pattern:
+
+```text
+Agent → MCP Server → Tool Functions
 ```
-1. Create detailed plan
-2. Execute each step
-3. Verify results
-4. Adjust plan if needed
-5. Continue until complete
-```
 
-### Reflection
-Best for: Tasks requiring quality control
-```
-1. Generate initial response
-2. Critique own response
-3. Identify improvements
-4. Regenerate with improvements
-5. Repeat until satisfied
-```
+This matters because:
+- tools become discoverable
+- tool interfaces become more standardized
+- assistants and applications can share tool servers
+- the agent and the tool implementation are more clearly separated
 
-## Tools & Libraries
+## Comparing the Two Examples
 
-### Agent Frameworks
-- **LangChain**: Comprehensive agent framework
-- **LangGraph**: Graph-based agent orchestration
-- **AutoGen**: Multi-agent framework from Microsoft
-- **CrewAI**: Role-based multi-agent systems
-- **Semantic Kernel**: Microsoft's agent framework
+### ReAct example
+Best for:
+- introducing the core loop
+- understanding local tool calling
+- testing agent logic
+- showing step-by-step reasoning
 
-### MCP Tools
-- **mcp**: Official MCP Python SDK
-- **anthropic**: Claude API with MCP support
-- **openai**: GPT models with function calling
+### MCP example
+Best for:
+- showing tool servers
+- explaining discoverable tools
+- connecting agents to structured tool ecosystems
+- demonstrating how agent systems scale beyond direct local function calls
 
-### Supporting Libraries
-- **pydantic**: Data validation for tool schemas
-- **tenacity**: Retry logic for tool calls
-- **asyncio**: Async agent operations
-- **redis**: Agent state management
-- **chromadb**: Long-term memory
+## Suggested Teaching Flow
+
+1. Start with `examples/react-agent/agent.py`
+2. Open `examples/react-agent/tools.py`
+3. Show the weather and database tools
+4. Run the agent and inspect the printed steps
+5. Run the tests
+6. Transition to `examples/mcp-agent/mcp_server.py`
+7. Show the `@mcp.tool` decorators
+8. Run the MCP server
+9. Run the MCP agent
+10. Compare direct tools versus MCP tools
 
 ## Best Practices
 
 ### Agent Design
-1. Start simple, add complexity gradually
-2. Define clear success criteria
-3. Implement comprehensive error handling
-4. Log all agent decisions and actions
-5. Test with diverse scenarios
-6. Monitor costs closely
-7. Implement safety guardrails
+- start with simple loops
+- make tool use observable
+- keep actions deterministic early on
+- add complexity gradually
 
 ### Tool Design
-1. Make tools focused and single-purpose
-2. Provide clear, detailed descriptions
-3. Use strong typing for parameters
-4. Return structured, parseable results
-5. Handle errors gracefully
-6. Document expected behavior
-7. Version your tools
+- keep tools single-purpose
+- provide clear inputs and outputs
+- validate assumptions
+- return structured results
 
-### Memory Management
-1. Summarize long conversations
-2. Use vector search for relevant context
-3. Implement memory pruning
-4. Store important information persistently
-5. Balance context size vs. cost
-6. Test memory retrieval accuracy
-
-### Safety & Alignment
-1. Implement human approval for critical actions
-2. Set spending limits
-3. Validate tool outputs
-4. Log all agent actions
-5. Implement rollback mechanisms
-6. Test edge cases thoroughly
-7. Monitor for unexpected behavior
-
-### Performance Optimization
-1. Cache tool results when appropriate
-2. Use parallel tool calls when possible
-3. Implement early stopping
-4. Optimize prompt length
-5. Use cheaper models for simple tasks
-6. Batch similar operations
-7. Monitor and optimize costs
+### Testing
+- test simple scenarios first
+- test fallback behavior
+- verify tools independently
+- avoid adding LLM complexity before the basic workflow is correct
 
 ## Common Pitfalls
 
-1. **Over-engineering**: Start simple, don't build complex systems prematurely
-2. **Poor tool descriptions**: AI can't use tools it doesn't understand
-3. **No error handling**: Tools fail, networks timeout, APIs have issues
-4. **Ignoring costs**: Agent loops can be expensive
-5. **Infinite loops**: Implement max iterations and timeouts
-6. **No monitoring**: Can't improve what you don't measure
-7. **Weak validation**: Validate all tool inputs and outputs
-8. **Context overflow**: Manage conversation length carefully
-9. **No testing**: Test agents with diverse scenarios
-10. **Security gaps**: Validate and sanitize all inputs
-
-## Advanced Topics
-
-### Multi-Agent Coordination
-- Task decomposition and delegation
-- Agent communication protocols
-- Conflict resolution strategies
-- Load balancing across agents
-- Shared memory and state
-
-### Agent Learning
-- Learning from user feedback
-- Improving tool selection over time
-- Adapting to user preferences
-- Few-shot learning from examples
-- Continuous improvement loops
-
-### Hybrid Systems
-- Combining rule-based and AI agents
-- Human-in-the-loop workflows
-- Fallback to human operators
-- Gradual automation
-- Quality assurance gates
+- over-engineering too early
+- hiding the agent loop behind too much framework code
+- making tools too broad or unclear
+- skipping tests
+- mixing abstract agent concepts with no runnable example
 
 ## Resources
 
-### Agent Frameworks
-- [LangChain Agents](https://python.langchain.com/docs/modules/agents/)
-- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
-- [AutoGen Documentation](https://microsoft.github.io/autogen/)
-- [CrewAI Documentation](https://docs.crewai.com/)
-
-### MCP Resources
-- [MCP Specification](https://modelcontextprotocol.io/)
-- [MCP Python SDK](https://github.com/anthropics/mcp-python)
-- [Building MCP Servers](https://modelcontextprotocol.io/docs/building-servers)
-- [MCP Best Practices](https://modelcontextprotocol.io/docs/best-practices)
-
-### Research Papers
-- [ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)
-- [Toolformer: Language Models Can Teach Themselves to Use Tools](https://arxiv.org/abs/2302.04761)
-- [Reflexion: Language Agents with Verbal Reinforcement Learning](https://arxiv.org/abs/2303.11366)
-
-### Articles & Tutorials
+### ReAct and agent design
+- [ReAct Paper](https://arxiv.org/abs/2210.03629)
 - [Building Effective Agents](https://www.anthropic.com/research/building-effective-agents)
-- [LangChain Agent Tutorial](https://python.langchain.com/docs/tutorials/agents/)
-- [Multi-Agent Systems Guide](https://microsoft.github.io/autogen/docs/tutorial/introduction)
 
+### MCP
+- [MCP Specification](https://modelcontextprotocol.io/)
+- [Building MCP Servers](https://modelcontextprotocol.io/docs/building-servers)
+
+### Python tooling
+- [FastMCP Documentation](https://github.com/jlowin/fastmcp)
+- [Pytest Documentation](https://docs.pytest.org/)
+
+## Week 8 Summary
+
+By the end of this week, students should be able to:
+
+- explain the ReAct loop
+- build a simple local tool-using agent
+- test agent behavior
+- expose tools with FastMCP
+- explain the difference between local tool calling and MCP-based tool serving
+- use the provided examples as a base for more advanced agent systems

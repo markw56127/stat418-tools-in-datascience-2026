@@ -1,253 +1,134 @@
-# Basic CI/CD Pipeline
+# Basic CI/CD Example
 
-A complete GitHub Actions CI/CD pipeline for a data science project.
+This example is a small FastAPI service plus GitHub Actions workflow files that demonstrate a practical CI/CD pipeline for a course-sized project.
 
-## Overview
+## What this example includes
 
-This example demonstrates:
-- Automated testing on every push
-- Code quality checks (linting, formatting)
-- Building container images with Podman
-- Deploying to Google Cloud Run
-- Environment-specific configurations
+- `app.py` — FastAPI app with:
+  - `GET /health`
+  - `POST /predict`
+- `test_app.py` — pytest-based API tests
+- `requirements.txt` — app, test, lint, and format dependencies
+- `Dockerfile` — container image for local runs or deployment
+- `ci.yml` — example continuous integration workflow
+- `deploy.yml` — example deployment workflow for Google Cloud Run
 
-## Files
+## Why this is useful
 
-- `.github/workflows/ci.yml` - CI pipeline (test, lint)
-- `.github/workflows/deploy.yml` - CD pipeline (deploy)
-- `tests/` - Test suite
-- `Dockerfile` - Container configuration
-- `requirements.txt` - Python dependencies
+This example shows the minimum pieces needed to move from:
+1. writing a small API,
+2. testing it automatically,
+3. packaging it in a container,
+4. and deploying it through GitHub Actions.
 
-## Setup
+It is intentionally simple so students can see the pipeline structure clearly.
 
-```bash
-# Clone and install
-git clone <your-repo>
-cd basic-cicd
-uv pip install -r requirements.txt
+## FastAPI app behavior
 
-# Run tests locally
-pytest
-
-# Run linting
-ruff check .
-black --check .
-```
-
-## GitHub Actions Workflows
-
-### CI Pipeline (`.github/workflows/ci.yml`)
-
-Runs on every push and pull request:
-
-```yaml
-name: CI
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      - run: pip install uv
-      - run: uv pip install --system -r requirements.txt
-      - run: pytest --cov=. --cov-report=xml
-      
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-      - run: pip install uv
-      - run: uv pip install --system ruff black
-      - run: ruff check .
-      - run: black --check .
-```
-
-### CD Pipeline (`.github/workflows/deploy.yml`)
-
-Deploys to Cloud Run when tests pass on main branch:
-
-```yaml
-name: Deploy
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    needs: test  # Wait for tests to pass
-    steps:
-      - uses: actions/checkout@v3
-      
-      - uses: google-github-actions/auth@v1
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-      
-      - name: Deploy to Cloud Run
-        run: |
-          gcloud run deploy my-app \
-            --source . \
-            --region us-central1 \
-            --allow-unauthenticated
-```
-
-## Setting Up Secrets
-
-1. Go to GitHub repository Settings → Secrets → Actions
-2. Add secrets:
-   - `GCP_SA_KEY`: Google Cloud service account key (JSON)
-   - `API_KEY`: Any API keys your app needs
-
-## Testing
-
-### Unit Tests
-
-```python
-# tests/test_utils.py
-def test_preprocess():
-    from utils import preprocess
-    assert preprocess("  hello  ") == "hello"
-
-def test_validate_input():
-    from utils import validate_input
-    assert validate_input({"value": 1}) == True
-    assert validate_input({}) == False
-```
-
-### Integration Tests
-
-```python
-# tests/test_api.py
-from fastapi.testclient import TestClient
-from main import app
-
-client = TestClient(app)
-
-def test_health_endpoint():
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
-
-def test_predict_endpoint():
-    response = client.post(
-        "/predict",
-        json={"features": [1.0, 2.0, 3.0]}
-    )
-    assert response.status_code == 200
-    assert "prediction" in response.json()
-```
-
-## Code Quality
-
-### Linting with Ruff
+### Health endpoint
 
 ```bash
-# Check for issues
-ruff check .
-
-# Auto-fix issues
-ruff check --fix .
-```
-
-### Formatting with Black
-
-```bash
-# Check formatting
-black --check .
-
-# Format code
-black .
-```
-
-## Deployment
-
-### Local Testing
-
-```bash
-# Build container
-podman build -t my-app .
-
-# Run locally
-podman run -p 8000:8000 my-app
-
-# Test
 curl http://localhost:8000/health
 ```
 
-### Deploy to Cloud Run
+Expected response:
 
-Automatic deployment happens when you push to main branch and tests pass.
+```json
+{"status":"ok"}
+```
 
-Manual deployment:
+### Prediction endpoint
 
 ```bash
-gcloud run deploy my-app \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"feature1": 2.0, "feature2": 4.0, "feature3": 6.0}'
 ```
 
-## Monitoring
+Expected response shape:
 
-### View Logs
+```json
+{
+  "prediction": 4.0
+}
+```
+
+## Local setup
 
 ```bash
-# GitHub Actions logs
-# Go to Actions tab in GitHub
-
-# Cloud Run logs
-gcloud run services logs read my-app --region us-central1
+cd week-9/examples/basic-cicd
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### Check Status
+## Run locally
+
+Because `app.py` includes a Python entrypoint, you can start it with:
 
 ```bash
-# Get service URL
-gcloud run services describe my-app --region us-central1 --format='value(status.url)'
-
-# Test health endpoint
-curl https://your-app-url/health
+python app.py
 ```
 
-## Workflow Triggers
+Then visit:
 
-The CI/CD pipeline runs on:
-- **Every push**: Runs tests and linting
-- **Every pull request**: Runs tests and linting
-- **Push to main**: Runs tests, linting, and deploys
+- API: `http://localhost:8000`
+- Swagger docs: `http://localhost:8000/docs`
 
-## Caching
+## Run tests and quality checks
 
-The workflow caches pip dependencies to speed up builds:
-
-```yaml
-- uses: actions/setup-python@v4
-  with:
-    python-version: '3.11'
-    cache: 'pip'  # Automatically caches based on requirements.txt
+```bash
+pytest -q
+ruff check .
+black --check .
 ```
 
-## Best Practices
+## Build and run container locally
 
-- **Fast feedback**: Tests run in parallel with linting
-- **Fail fast**: Pipeline stops on first failure
-- **Caching**: Dependencies are cached for speed
-- **Secrets**: Never commit secrets, use GitHub Secrets
-- **Testing**: Test locally before pushing
-- **Monitoring**: Check logs after deployment
+```bash
+podman build -t basic-cicd-example .
+podman run -p 8000:8000 basic-cicd-example
+```
 
-## Common Issues
+Then test:
 
-**Tests fail in CI but pass locally**: Check Python version matches
-**Deployment fails**: Verify GCP_SA_KEY secret is set correctly
-**Slow pipeline**: Add caching, parallelize jobs
-**Import errors**: Ensure all dependencies in requirements.txt
+```bash
+curl http://localhost:8000/health
+```
 
+## CI workflow overview
+
+The `ci.yml` file demonstrates a standard CI sequence:
+
+- check out the repository
+- install Python
+- install dependencies
+- run tests
+- run Ruff
+- run Black in check mode
+
+That gives fast feedback whenever code is pushed or a pull request is opened.
+
+## Deploy workflow overview
+
+The `deploy.yml` file shows the structure of a deployment job that can:
+
+- authenticate to Google Cloud,
+- build a deployable container,
+- deploy the app to Cloud Run.
+
+In a real repository, secrets such as service account credentials would be stored in GitHub repository secrets.
+
+## Suggested teaching points
+
+Use this example to explain:
+
+- why CI should run on every push and pull request,
+- why linting and formatting belong in automation,
+- why containers make deployment more reproducible,
+- and how CI and CD are connected but not identical.
+
+## Notes
+
+- The workflow files live directly in this teaching example directory so students can read them easily.
+- In a production GitHub repository, these files would normally live under `.github/workflows/`.

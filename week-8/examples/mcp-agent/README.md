@@ -1,270 +1,120 @@
 # MCP-Powered Agent
 
-An AI agent that connects to MCP (Model Context Protocol) servers to dynamically discover and use tools.
+A runnable example of an agent working with a FastMCP server and discoverable tools.
 
 ## Overview
 
 This example demonstrates:
-- Connecting to MCP servers
-- Dynamic tool discovery
-- Using multiple MCP tools
-- Handling tool responses
-- Integration with Claude Desktop
+- defining tools with FastMCP
+- exposing those tools through an MCP server
+- using MCP-style tools from a Python agent
+- simple user lookup, notification, and database search workflows
+- local configuration for connecting a client to the server
 
 ## Files
 
-- `mcp_agent.py` - Agent with MCP integration
-- `mcp_server.py` - Example MCP server implementation
-- `config.json` - MCP server configuration
+- `mcp_server.py` - FastMCP server with demo tools
+- `mcp_agent.py` - simple Python agent that uses the demo tools
+- `config.json` - example MCP client configuration
 - `requirements.txt` - Python dependencies
 
 ## Setup
 
 ```bash
-# Install dependencies
-uv pip install google-generativeai mcp
-# OR
-uv pip install openai mcp  # for OpenRouter
-
-# Set your API key (use free tier)
-export GOOGLE_API_KEY="your-free-gemini-key"
-# OR
-export OPENROUTER_API_KEY="your-free-openrouter-key"
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
 ```
 
-**Note**: This example uses free-tier APIs from Google (Gemini) or OpenRouter. MCP works with any LLM provider.
+This example is local and self-contained so it can be demonstrated in class without external APIs.
 
 ## Running the MCP Server
 
 ```bash
-# Start the MCP server
 python mcp_server.py
 ```
 
 The server exposes these tools:
-- `search_database` - Search a product database
-- `get_user_info` - Get user information
-- `send_notification` - Send notifications
+- `search_database`
+- `get_user_info`
+- `send_notification`
 
 ## Running the Agent
 
 ```bash
-# Run the agent (connects to MCP server)
 python mcp_agent.py
 ```
 
-## Claude Desktop Integration
+Example behavior:
+- look up a demo user such as `alice`
+- optionally send that user a mock notification
+- search a tiny product database
 
-To use this MCP server with Claude Desktop:
+## Config File
 
-1. Edit Claude Desktop config:
-```bash
-# macOS
-nano ~/Library/Application\ Support/Claude/claude_desktop_config.json
+`config.json` provides a minimal example of how a local MCP client could register the server:
 
-# Windows
-notepad %APPDATA%\Claude\claude_desktop_config.json
-```
-
-2. Add your MCP server:
 ```json
 {
   "mcpServers": {
-    "my-tools": {
+    "demo-tools": {
       "command": "python",
-      "args": ["-m", "mcp_server"],
-      "env": {
-        "DATABASE_URL": "sqlite:///data.db"
-      }
+      "args": ["mcp_server.py"]
     }
   }
 }
 ```
 
-3. Restart Claude Desktop
+## FastMCP Server Design
 
-4. Tools will be automatically available in conversations
-
-## MCP Server Implementation
+The server defines tools with the `@mcp.tool` decorator. This keeps the example simple and readable:
 
 ```python
-from mcp.server import Server
-from mcp.types import Tool, TextContent
+from fastmcp import FastMCP
 
-server = Server("my-tools")
+mcp = FastMCP("demo-tools")
 
-@server.list_tools()
-async def list_tools() -> list[Tool]:
-    return [
-        Tool(
-            name="search_database",
-            description="Search the product database",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "limit": {"type": "integer", "default": 10}
-                },
-                "required": ["query"]
-            }
-        )
-    ]
-
-@server.call_tool()
-async def call_tool(name: str, arguments: dict):
-    if name == "search_database":
-        results = await search_db(arguments["query"], arguments.get("limit", 10))
-        return [TextContent(type="text", text=json.dumps(results))]
-    
-    raise ValueError(f"Unknown tool: {name}")
+@mcp.tool
+def search_database(query: str, limit: int = 10) -> list[dict]:
+    ...
 ```
 
-## Agent Implementation
+## Demo Workflows
 
-```python
-import anthropic
-from mcp.client import Client
+### User lookup
+The agent can retrieve information for:
+- `alice`
+- `bob`
 
-# Connect to MCP server
-mcp_client = Client("http://localhost:8000")
+### Notification sending
+The agent can simulate sending a notification message to a known user.
 
-# Discover available tools
-tools = await mcp_client.list_tools()
+### Product search
+The agent can search a tiny in-memory product catalog for:
+- laptops
+- tablets
 
-# Create agent with MCP tools
-client = anthropic.Anthropic()
+## Teaching Notes
 
-def run_agent(task: str):
-    messages = [{"role": "user", "content": task}]
-    
-    while True:
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=4096,
-            tools=tools,
-            messages=messages
-        )
-        
-        if response.stop_reason == "end_turn":
-            return response.content[0].text
-        
-        # Execute MCP tool calls
-        for tool_use in response.content:
-            if tool_use.type == "tool_use":
-                result = await mcp_client.call_tool(
-                    tool_use.name,
-                    tool_use.input
-                )
-                messages.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": tool_use.id,
-                        "content": result
-                    }]
-                })
-```
+This example is designed to support the week 8 topics:
+- MCP server setup
+- discoverable tools
+- agent-to-tool interaction
+- structured tool inputs and outputs
 
-## Key Concepts
-
-### Tool Discovery
-
-MCP servers expose their tools through a standard interface:
-
-```python
-# Agent automatically discovers tools
-tools = await mcp_client.list_tools()
-
-# Tools include name, description, and schema
-for tool in tools:
-    print(f"{tool.name}: {tool.description}")
-```
-
-### Tool Execution
-
-The agent calls tools through the MCP protocol:
-
-```python
-# Agent decides to use a tool
-result = await mcp_client.call_tool(
-    name="search_database",
-    arguments={"query": "laptop", "limit": 5}
-)
-
-# Result is returned to the agent
-```
-
-### Error Handling
-
-Handle MCP connection and tool errors:
-
-```python
-try:
-    result = await mcp_client.call_tool(name, args)
-except MCPConnectionError:
-    # MCP server is down
-    logger.error("MCP server unavailable")
-except MCPToolError as e:
-    # Tool execution failed
-    logger.error(f"Tool failed: {e}")
-```
-
-## Multiple MCP Servers
-
-Connect to multiple MCP servers:
-
-```python
-# Connect to multiple servers
-database_tools = await Client("http://localhost:8000").list_tools()
-api_tools = await Client("http://localhost:8001").list_tools()
-
-# Combine tools
-all_tools = database_tools + api_tools
-
-# Agent can use tools from all servers
-response = client.messages.create(
-    model="claude-3-5-sonnet-20241022",
-    tools=all_tools,
-    messages=messages
-)
-```
-
-## Security Considerations
-
-- **Authentication**: Use API keys for MCP servers
-- **Authorization**: Validate tool access per user
-- **Input validation**: Sanitize all tool inputs
-- **Rate limiting**: Prevent abuse of MCP tools
-- **Logging**: Log all tool calls for audit
-
-## Testing
-
-Test MCP integration:
-
-```python
-def test_mcp_connection():
-    """Test connection to MCP server"""
-    client = Client("http://localhost:8000")
-    tools = await client.list_tools()
-    assert len(tools) > 0
-
-def test_tool_execution():
-    """Test tool execution through MCP"""
-    client = Client("http://localhost:8000")
-    result = await client.call_tool("search_database", {"query": "test"})
-    assert result is not None
-```
+The agent is intentionally simple so students can focus on the MCP pattern before layering in LLM-based tool selection.
 
 ## Common Issues
 
-**MCP server not found**: Check server is running and URL is correct
-**Tool not available**: Verify tool is registered in MCP server
-**Authentication failed**: Check API keys and credentials
-**Timeout errors**: Increase timeout or optimize tool execution
+**`fastmcp` import error**: install dependencies with `uv pip install -r requirements.txt`
+
+**Unknown user**: use `alice` or `bob` in the demo task
+
+**Server/client confusion**: `mcp_server.py` defines tools and runs the server; `mcp_agent.py` demonstrates how an agent would use those tools in a simple workflow
 
 ## Next Steps
 
-- Add authentication to your MCP server
-- Implement more complex tools
-- Deploy MCP server to production
-- Monitor tool usage and performance
+- connect a real MCP client implementation
+- add tests for the MCP example
+- swap rule-based task routing for an LLM planner
+- add more domain-specific tools
