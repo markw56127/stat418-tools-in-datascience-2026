@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 from dataclasses import dataclass, field
@@ -144,13 +145,63 @@ class MCPReActAgent:
         return str(content)
 
 
-if __name__ == "__main__":
-    agent = MCPReActAgent()
-    try:
-        result = asyncio.run(agent.run("Look up alice, summarize her account, and send her a notification."))
-        print(result.final_answer)
+def print_result(result: MCPAgentResult, *, verbose: bool = False) -> None:
+    if verbose:
         for call in result.tool_calls:
-            print(f"{call.tool_name}: {call.arguments} -> {call.result}")
+            print(f"Tool: {call.tool_name}")
+            print(f"Arguments: {json.dumps(call.arguments)}")
+            print(f"Result: {json.dumps(call.result)}")
+            print()
+    print(f"Final Answer: {result.final_answer}")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run the MCP agent example.")
+    parser.add_argument("--task", type=str, help="Run a single task and exit.")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print MCP tool calls and results in addition to the final answer.",
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Start an interactive CLI loop.",
+    )
+    return parser
+
+
+async def run_interactive(agent: MCPReActAgent, *, verbose: bool) -> None:
+    print("MCP agent interactive mode. Type 'exit' or 'quit' to stop.")
+    while True:
+        user_task = input("\nTask> ").strip()
+        if not user_task:
+            continue
+        if user_task.lower() in {"exit", "quit"}:
+            print("Exiting.")
+            return
+
+        try:
+            result = await agent.run(user_task)
+            print_result(result, verbose=verbose)
+        except LLMClientError as exc:
+            print(f"LLM configuration error: {exc}")
+            return
+        except Exception as exc:
+            print(f"Agent error: {exc}")
+
+
+if __name__ == "__main__":
+    args = build_parser().parse_args()
+    agent = MCPReActAgent()
+
+    try:
+        if args.interactive:
+            asyncio.run(run_interactive(agent, verbose=args.verbose))
+        else:
+            task = args.task or "Look up alice, summarize her account, and send her a notification."
+            result = asyncio.run(agent.run(task))
+            print_result(result, verbose=args.verbose)
     except LLMClientError as exc:
         print(f"LLM configuration error: {exc}")
 

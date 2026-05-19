@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from dataclasses import dataclass, field
 from typing import Any
@@ -111,24 +112,66 @@ class ReActAgent:
         return str(content)
 
 
-def print_result(result: AgentResult) -> None:
-    for step in result.steps:
-        print(f"Thought: {step.thought}")
-        if step.action:
-            print(f"Action: {step.action}({json.dumps(step.action_input)})")
-        if step.observation is not None:
-            print(f"Observation: {json.dumps(step.observation)}")
-        print()
+def print_result(result: AgentResult, *, verbose: bool = False) -> None:
+    if verbose:
+        for step in result.steps:
+            print(f"Thought: {step.thought}")
+            if step.action:
+                print(f"Action: {step.action}({json.dumps(step.action_input)})")
+            if step.observation is not None:
+                print(f"Observation: {json.dumps(step.observation)}")
+            print()
     print(f"Final Answer: {result.final_answer}")
 
 
-if __name__ == "__main__":
-    agent = ReActAgent()
-    user_task = "What's the weather in San Francisco and should I bring an umbrella?"
-    try:
-        result = agent.run(user_task)
-        print_result(result)
-    except LLMClientError as exc:
-        print(f"LLM configuration error: {exc}")
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run the ReAct agent example.")
+    parser.add_argument("--task", type=str, help="Run a single task and exit.")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print tool calls and observations in addition to the final answer.",
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Start an interactive CLI loop.",
+    )
+    return parser
 
-# Made with Bob
+
+def run_interactive(agent: ReActAgent, *, verbose: bool) -> None:
+    print("ReAct agent interactive mode. Type 'exit' or 'quit' to stop.")
+    while True:
+        user_task = input("\nTask> ").strip()
+        if not user_task:
+            continue
+        if user_task.lower() in {"exit", "quit"}:
+            print("Exiting.")
+            return
+
+        try:
+            result = agent.run(user_task)
+            print_result(result, verbose=verbose)
+        except LLMClientError as exc:
+            print(f"LLM configuration error: {exc}")
+            return
+        except Exception as exc:
+            print(f"Agent error: {exc}")
+
+
+if __name__ == "__main__":
+    args = build_parser().parse_args()
+    agent = ReActAgent()
+
+    if args.interactive:
+        run_interactive(agent, verbose=args.verbose)
+    else:
+        user_task = args.task or "What's the weather in San Francisco and should I bring an umbrella?"
+        try:
+            result = agent.run(user_task)
+            print_result(result, verbose=args.verbose)
+        except LLMClientError as exc:
+            print(f"LLM configuration error: {exc}")
+
+

@@ -8,8 +8,10 @@ This example demonstrates:
 - defining tools with FastMCP
 - exposing those tools through a real MCP server over stdio
 - discovering tools dynamically with the Python `mcp` client library
-- using OpenRouter with a Gemini model for tool selection and final answer generation
+- using OpenRouter with the NVIDIA Nemotron free model by default
 - combining local tools and external APIs in an MCP workflow
+- interactive CLI usage for demos and experimentation
+- verbose trace output showing the MCP tool calls made by the agent
 
 ## Files
 
@@ -36,8 +38,10 @@ export OPENROUTER_API_KEY=your_key_here
 Optional model override:
 
 ```bash
-export OPENROUTER_MODEL=google/gemini-2.0-flash-001
+export OPENROUTER_MODEL=nvidia/nemotron-3-super-120b-a12b:free
 ```
+
+If you do not set `OPENROUTER_MODEL`, the code already defaults to the NVIDIA Nemotron model above.
 
 ## Running the MCP Server
 
@@ -58,18 +62,64 @@ The server exposes these tools:
 The agent launches the MCP server over stdio, initializes an MCP session, discovers the available tools, and lets the LLM decide when to call them.
 
 ```bash
+# Run the default demo task
 python mcp_agent.py
+
+# Run a one-off custom task
+python mcp_agent.py --task "Look up alice, check the weather in her city, and send her a short notification."
+
+# Show the MCP tool trace
+python mcp_agent.py --task "Look up bob and summarize his account." --verbose
+
+# Start an interactive CLI loop
+python mcp_agent.py --interactive
+
+# Interactive mode with verbose MCP tool traces
+python mcp_agent.py --interactive --verbose
 ```
 
-The default task in `mcp_agent.py`:
+The default task:
 - looks up `alice`
 - summarizes her account
 - sends a notification
 
-You can adapt the task string in the script to ask for:
-- weather for a user's city
-- product recommendations
-- user lookup plus follow-up actions
+## Example Interaction
+
+### One-shot run
+
+```text
+$ python mcp_agent.py --task "Look up alice, check the weather in her city, and send her a short notification." --verbose
+
+Tool: get_user_info
+Arguments: {"username": "alice"}
+Result: {"username": "alice", "full_name": "Alice Johnson", "city": "San Francisco", "account_tier": "premium"}
+
+Tool: get_weather
+Arguments: {"location": "San Francisco"}
+Result: {"location": "San Francisco", "temp_f": 58.4, "conditions": "partly cloudy", "wind_speed_mph": 7.1}
+
+Tool: send_notification
+Arguments: {"username": "alice", "message": "Hi Alice, it's currently cool and partly cloudy in San Francisco."}
+Result: {"status": "sent", "username": "alice", "message_preview": "Hi Alice, it's currently cool and partly cloudy in San Francisco."}
+
+Final Answer: I looked up Alice, checked the current weather in San Francisco, and sent her a short notification with the update.
+```
+
+### Interactive mode
+
+```text
+$ python mcp_agent.py --interactive
+MCP agent interactive mode. Type 'exit' or 'quit' to stop.
+
+Task> look up bob and summarize his account
+Final Answer: Bob is a standard-tier user based in Seattle.
+
+Task> check the weather in his city too
+Final Answer: Seattle is currently cool with light wind.
+
+Task> quit
+Exiting.
+```
 
 ## Config File
 
@@ -120,6 +170,14 @@ The agent uses the actual Python MCP client library:
 
 That means the example is not pretending to be MCP-compatible. It is using the real protocol client flow.
 
+## Why the CLI Mode Helps
+
+The CLI makes the example easier to teach and explore because you can:
+- run a single structured request with `--task`
+- demonstrate actual MCP tool traffic with `--verbose`
+- run multiple prompts in a row with `--interactive`
+- compare the same MCP server behavior across different user requests without editing source code
+
 ## Example Workflow
 
 A representative multi-step request is:
@@ -148,7 +206,7 @@ That makes it much closer to how production agent systems are structured.
 
 ## Common Issues
 
-**`fastmcp` or `mcp` import error**: install dependencies with `uv pip install -r requirements.txt`
+**`fastmcp` or `mcp` import error**: install dependencies with `uv pip install -r requirements.txt` or sync the workspace environment so the editor can resolve those packages
 
 **`OPENROUTER_API_KEY is not set`**: export the environment variable before running the agent
 
@@ -157,4 +215,6 @@ That makes it much closer to how production agent systems are structured.
 **Weather lookup failed**: the Open-Meteo geocoding request may fail if the city is misspelled or the network is unavailable
 
 **Server/client confusion**: `mcp_server.py` defines the tools and can be run directly, but `mcp_agent.py` also starts that server internally over stdio for the MCP session
+
+**Want to inspect what happened**: rerun with `--verbose` to see the MCP tool calls, arguments, and returned results
 

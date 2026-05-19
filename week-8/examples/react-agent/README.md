@@ -7,14 +7,15 @@ A runnable implementation of a ReAct-style agent using a real LLM API, OpenRoute
 This example demonstrates:
 - a ReAct-style tool loop driven by a real LLM
 - function/tool calling through OpenRouter
-- a Gemini model selected through OpenRouter
+- the NVIDIA Nemotron free model through OpenRouter by default
 - live weather lookup through Open-Meteo
 - local product search with structured tool schemas
-- lightweight tests around the non-network helper logic
+- interactive CLI usage for classroom demos
+- verbose trace output that shows tool calls and observations
 
 ## Files
 
-- `agent.py` - main ReAct agent implementation
+- `agent.py` - main ReAct agent implementation and CLI entry point
 - `tools.py` - tool definitions and implementations
 - `llm_client.py` - OpenRouter chat completion helper
 - `test_agent.py` - unit tests for helper behavior
@@ -37,14 +38,28 @@ export OPENROUTER_API_KEY=your_key_here
 Optional model override:
 
 ```bash
-export OPENROUTER_MODEL=google/gemini-2.0-flash-001
+export OPENROUTER_MODEL=nvidia/nemotron-3-super-120b-a12b:free
 ```
+
+If you do not set `OPENROUTER_MODEL`, the code already defaults to the NVIDIA Nemotron model above.
 
 ## Usage
 
 ```bash
-# Run the agent demo
+# Run the default demo task
 python agent.py
+
+# Run a one-off custom task
+python agent.py --task "What's the weather in San Francisco and should I bring a jacket?"
+
+# Show the tool trace along with the final answer
+python agent.py --task "Find a laptop under $1500 and explain the tradeoffs" --verbose
+
+# Start an interactive CLI loop
+python agent.py --interactive
+
+# Interactive mode with verbose tool traces
+python agent.py --interactive --verbose
 
 # Run tests
 pytest test_agent.py
@@ -52,13 +67,32 @@ pytest test_agent.py
 
 ## Example Interaction
 
+### One-shot run
+
 ```text
-User: What's the weather in San Francisco and should I bring an umbrella?
+$ python agent.py --task "What's the weather in San Francisco and should I bring a jacket?" --verbose
 
-Tool Call: get_weather({"location": "San Francisco"})
-Tool Result: {"location": "San Francisco", "temp_f": 58.4, "conditions": "partly cloudy", "wind_speed_mph": 7.1}
+Tool: get_weather
+Arguments: {"location": "San Francisco"}
+Result: {"location": "San Francisco", "region": "California", "country": "United States", "temp_f": 58.4, "conditions": "partly cloudy", "wind_speed_mph": 7.1}
 
-Final Answer: San Francisco is currently cool and partly cloudy. Based on the current conditions, bringing a light jacket makes sense, but an umbrella may not be necessary unless you expect conditions to change later.
+Final Answer: San Francisco is currently cool and partly cloudy with a light breeze, so bringing a light jacket is a good idea.
+```
+
+### Interactive mode
+
+```text
+$ python agent.py --interactive
+Interactive mode enabled. Type 'exit' or 'quit' to stop.
+
+Task> compare phones under $1000
+Final Answer: The Pixel 8 gives you the best camera value, while the iPhone 15 is a strong choice if you prefer Apple's ecosystem.
+
+Task> what is the weather in Seattle right now?
+Final Answer: Seattle is currently cool with light wind. A jacket makes sense.
+
+Task> quit
+Exiting.
 ```
 
 ## Supported Tools
@@ -85,6 +119,14 @@ The agent follows this pattern:
 3. execute the requested tool locally
 4. append the tool result to the conversation
 5. ask the model for the final answer or next tool call
+
+### Why the CLI Mode Helps
+
+The CLI makes the example more useful in class because you can:
+- ask multiple questions without editing Python files
+- demonstrate one-shot prompts with `--task`
+- show the reasoning workflow indirectly through `--verbose`
+- compare how the same agent behaves across different prompts live
 
 ### Tool Definitions
 
@@ -123,5 +165,5 @@ pytest test_agent.py
 
 **Import errors**: make sure you are running commands from inside `week-8/examples/react-agent/`
 
-**Unexpected tool behavior**: inspect the tool schemas and the exact JSON arguments returned by the model
+**Unexpected tool behavior**: rerun with `--verbose` and inspect the exact tool arguments and tool results returned during execution
 
