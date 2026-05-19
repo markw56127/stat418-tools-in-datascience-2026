@@ -2,6 +2,10 @@
 
 This week focuses on building and running tool-using agents with both a direct ReAct pattern and an MCP-based client/server pattern.
 
+## Slides
+
+- [Week 8 Slides (PDF)](./slides-week-8.pdf)
+
 ## Examples
 
 ### ReAct Agent
