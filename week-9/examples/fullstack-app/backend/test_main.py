@@ -11,7 +11,7 @@ def test_health_endpoint():
     assert response.json() == {"status": "ok"}
 
 
-def test_predict_endpoint_returns_prediction_and_cached_flag():
+def test_predict_endpoint_returns_real_iris_prediction_and_cached_flag():
     response = client.post(
         "/predict",
         json={"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2},
@@ -21,6 +21,8 @@ def test_predict_endpoint_returns_prediction_and_cached_flag():
     body = response.json()
     assert body["prediction"] in {"setosa", "versicolor", "virginica"}
     assert body["cached"] is False
+    assert body["sepal_length"] == 5.1
+    assert body["petal_width"] == 0.2
 
 
 def test_predict_endpoint_uses_cache_on_repeat_request():
@@ -31,6 +33,7 @@ def test_predict_endpoint_uses_cache_on_repeat_request():
 
     assert first.status_code == 200
     assert second.status_code == 200
+    assert first.json()["prediction"] == second.json()["prediction"]
     assert second.json()["cached"] is True
 
 
@@ -46,4 +49,7 @@ def test_history_endpoint_tracks_predictions():
     body = response.json()
     assert "requests" in body
     assert len(body["requests"]) >= 1
+    latest = body["requests"][-1]
+    assert latest["prediction"] in {"setosa", "versicolor", "virginica"}
+    assert "cached" in latest
 

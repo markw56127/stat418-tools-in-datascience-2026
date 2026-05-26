@@ -60,17 +60,17 @@ graph LR
 
 ```mermaid
 sequenceDiagram
-    User->>+Frontend: enter query and click Submit
-    Frontend->>+Backend: POST /predict
-    Backend->>Backend: check CACHE
+    User->>+Frontend: enter iris measurements and click Predict species
+    Frontend->>+Backend: POST /predict with sepal/petal features
+    Backend->>Backend: check CACHE using feature tuple
     alt cache hit
         Backend-->>Frontend: prediction + cached=true
     else cache miss
-        Backend->>Backend: create prediction
+        Backend->>Backend: run in-memory iris classifier
         Backend->>Backend: save to CACHE and PREDICTION_LOG
         Backend-->>Frontend: prediction + cached=false
     end
-    Frontend-->>-User: display result
+    Frontend-->>-User: display predicted species
 ```
 
 ## Backend behavior
@@ -105,6 +105,10 @@ Example response shape:
 
 ```json
 {
+  "sepal_length": 5.1,
+  "sepal_width": 3.5,
+  "petal_length": 1.4,
+  "petal_width": 0.2,
   "prediction": "setosa",
   "cached": false
 }
@@ -120,7 +124,8 @@ The Streamlit app provides:
 
 - numeric input widgets for iris features
 - a button to submit a prediction request
-- a display of the predicted class
+- a display of the predicted species and cache flag
+- a JSON view of the latest backend response
 - a simple history panel populated from the backend
 
 The frontend calls the backend using the `BACKEND_URL` environment variable.

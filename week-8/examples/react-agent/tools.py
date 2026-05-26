@@ -62,9 +62,9 @@ def get_weather(location: str) -> dict[str, Any]:
         params={
             "latitude": latitude,
             "longitude": longitude,
-            "current": "temperature_2m,weather_code,precipitation_probability",
+            "current": "temperature_2m,weather_code,wind_speed_10m",
             "temperature_unit": "fahrenheit",
-            "precipitation_unit": "percent",
+            "wind_speed_unit": "mph",
         },
         timeout=30,
     )
@@ -73,7 +73,7 @@ def get_weather(location: str) -> dict[str, Any]:
 
     current = forecast_payload.get("current", {})
     weather_code = current.get("weather_code")
-    precipitation_probability = current.get("precipitation_probability", 0)
+    wind_speed_mph = current.get("wind_speed_10m")
 
     return {
         "location": match["name"],
@@ -81,7 +81,7 @@ def get_weather(location: str) -> dict[str, Any]:
         "country": match.get("country"),
         "temp_f": current.get("temperature_2m"),
         "conditions": WEATHER_CODE_LABELS.get(weather_code, f"weather code {weather_code}"),
-        "precipitation_chance": precipitation_probability,
+        "wind_speed_mph": wind_speed_mph,
     }
 
 
