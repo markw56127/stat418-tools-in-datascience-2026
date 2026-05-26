@@ -79,19 +79,33 @@
   {
     "slide_num": 12,
     "type": "content",
+    "title": "Example File vs Runtime Workflow Location",
+    "content": "For class, we keep the readable example here:\n- `week-9/examples/fullstack-app/ci.yml`\n\nFor GitHub Actions to actually run it, the workflow must exist here:\n- `.github/workflows/week9-fullstack-ci.yml`\n\nSame idea, different purpose:\n- example next to the app\n- executable workflow in `.github/workflows/`",
+    "speaker_notes": "Make the distinction explicit because students often assume GitHub will run a workflow file from anywhere in the repository. It will not. The class-friendly version can stay beside the week 9 example so students can find it easily while reading the app. But the executable version must live under `.github/workflows/` at the repository root. This is a useful teaching pattern because it lets the repo contain both a pedagogically convenient example and the actual file GitHub consumes."
+  },
+  {
+    "slide_num": 13,
+    "type": "content",
+    "title": "What the Week 9 Workflow Actually Does",
+    "content": "On push or pull request, GitHub Actions:\n- checks out the repository\n- sets up Python 3.11\n- installs `uv`\n- runs `uv sync` in the backend\n- runs `uv run pytest -q`\n- runs `uv sync` in the frontend\n- runs `uv run python -m py_compile app.py`\n\nNo secrets are required for this CI workflow.",
+    "speaker_notes": "This slide answers the practical question of what students should expect the automation to do. The workflow does not deploy anything and it does not require cloud credentials. It simply validates the two services in the full-stack example: backend tests and a frontend smoke check. That makes it a clean first example of CI because the automation is visible, useful, and not dependent on extra GitHub configuration."
+  },
+  {
+    "slide_num": 14,
+    "type": "content",
     "title": "Triggers, Jobs, and Steps",
     "content": "Core GitHub Actions concepts:\n- `push` and `pull_request` define when automation runs\n- jobs are separate runner environments\n- steps are individual actions or commands inside a job\n- `needs` can enforce ordering between jobs",
     "speaker_notes": "Provide the basic workflow vocabulary clearly. A trigger decides when automation starts. A job is a unit of work running on a fresh machine or runner. Steps are the commands or reusable actions that execute inside that job. `needs` creates dependencies between jobs so one must finish before another begins. This vocabulary matters because students will often debug workflow files by reasoning at the wrong level. For example, they may assume files created in one job automatically exist in another, which is usually not true without artifacts or explicit transfer."
   },
   {
-    "slide_num": 13,
+    "slide_num": 15,
     "type": "content",
     "title": "Quality Checks in CI",
     "content": "CI can enforce more than tests:\n- linting with Ruff\n- formatting with Black\n- type checks if desired\n- security or dependency scanning later\n\nTests check behavior; the rest keeps the repo consistent and reviewable.",
     "speaker_notes": "Keep this slide direct and non-meta. The point is that automation can validate both behavior and code quality. That reduces review noise and makes repository standards explicit."
   },
   {
-    "slide_num": 14,
+    "slide_num": 16,
     "type": "code",
     "title": "Typical Deployment Workflow Shape",
     "content": "name: Deploy\n\non:\n  push:\n    branches: [main]\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: google-github-actions/auth@v1\n        with:\n          credentials_json: ${{ secrets.GCP_SA_KEY }}\n      - run: |\n          gcloud run deploy my-app \\\n            --source . \\\n            --region us-central1",
